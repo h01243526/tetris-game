@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>个人中心 - 俄罗斯方块</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="navbar" id="navbar"></div>
+
+  <div class="container">
+    <div class="high-banner">
+      <div>
+        <div class="label">个人历史最高分</div>
+        <div class="score" id="highScore">0</div>
+      </div>
+      <div style="color:var(--text-dim);font-size:13px;">每局结束自动保存<br>总榜 / 日榜 / 周榜均参与排名</div>
+    </div>
+
+    <div class="grid-2">
+      <!-- 个人资料 -->
+      <div class="card">
+        <h3>个人资料</h3>
+        <div class="profile-item"><span class="k">用户名</span><span class="v" id="pUsername">-</span></div>
+        <div class="profile-item"><span class="k">昵称</span><span class="v" id="pNickname">-</span></div>
+        <div class="profile-item"><span class="k">角色</span><span class="v" id="pRole">-</span></div>
+        <div class="profile-item"><span class="k">注册时间</span><span class="v" id="pCreated">-</span></div>
+        <div class="profile-item"><span class="k">最后登录</span><span class="v" id="pLastLogin">-</span></div>
+      </div>
+
+      <!-- 账号操作 -->
+      <div>
+        <div class="card" style="margin-bottom:20px;">
+          <h3>修改昵称</h3>
+          <form id="nickForm">
+            <div class="form-group">
+              <label>新昵称（1~20 个字符）</label>
+              <input class="input" id="newNickname" maxlength="20" placeholder="请输入新昵称">
+            </div>
+            <button class="btn btn-primary" type="submit">保存昵称</button>
+          </form>
+        </div>
+        <div class="card">
+          <h3>修改密码</h3>
+          <form id="pwdForm">
+            <div class="form-group">
+              <label>原密码</label>
+              <input class="input" id="oldPwd" type="password" placeholder="请输入原密码" maxlength="20">
+            </div>
+            <div class="form-group">
+              <label>新密码（6~20 位）</label>
+              <input class="input" id="newPwd" type="password" placeholder="请输入新密码" maxlength="20">
+            </div>
+            <div class="form-group">
+              <label>确认新密码</label>
+              <input class="input" id="confirmPwd" type="password" placeholder="请再次输入新密码" maxlength="20">
+            </div>
+            <button class="btn btn-magenta" type="submit">修改密码</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- 历史对局 -->
+    <div class="card" style="margin-top:20px;">
+      <h3>历史对局记录（按时间倒序）</h3>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr><th>序号</th><th>对局开始时间</th><th>对局结束时间</th><th>得分</th><th>消除行数</th><th>等级</th><th>游戏时长</th></tr>
+          </thead>
+          <tbody id="gamesBody"></tbody>
+        </table>
+      </div>
+      <div class="empty hidden" id="gamesEmpty">暂无对局记录，快去开始第一局游戏吧！</div>
+      <div class="pagination">
+        <button class="btn btn-ghost btn-sm" id="prevPage">上一页</button>
+        <span id="pageInfo">1 / 1</span>
+        <button class="btn btn-ghost btn-sm" id="nextPage">下一页</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/common.js"></script>
+  <script src="/js/profile.js"></script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+# Render 云端部署蓝图（Blueprint）
+# 用法：把整个项目仓库推到 GitHub，在 Render 选择 "New + > Blueprint" 关联本仓库，
+#       Render 会自动按下面的配置创建免费 Web 服务。
+# 敏感信息（数据库账号密码等）标记为 sync:false，需在 Render 控制台手动填写。
+services:
+  - type: web
+    name: tetris-game
+    runtime: python
+    plan: free
+    region: singapore
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: gunicorn --chdir backend wsgi:application --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 60 --preload
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      # ---- 云数据库连接（在 Render 控制台填写，勿写进仓库） ----
+      - key: MYSQL_HOST
+        sync: false
+      - key: MYSQL_PORT
+        value: "4000"
+      - key: MYSQL_USER
+        sync: false
+      - key: MYSQL_PASSWORD
+        sync: false
+      - key: MYSQL_DB
+        value: tetris_db
+      - key: MYSQL_SSL
+        value: "1"
+      # ---- 认证与管理员（首次部署前建议改掉默认值） ----
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false

@@ -1,0 +1,21 @@
+# 本地配置与密钥（勿提交）
+backend/db_config.json
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+env/
+
+# 本地运行产物
+开始游戏.html
+
+# 临时依赖目录
+vendor/
+
+# 编辑器
+.vscode/
+.idea/
+*.log

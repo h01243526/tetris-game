@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>俄罗斯方块 - 游戏</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="navbar" id="navbar"></div>
+
+  <div class="container">
+    <div class="game-layout">
+      <!-- Canvas 棋盘 + 遮罩层 -->
+      <div class="board-wrap">
+        <canvas id="board" width="300" height="600"></canvas>
+
+        <!-- 开始前：初始难度选择 -->
+        <div class="overlay" id="startOverlay">
+          <h2>俄罗斯方块</h2>
+          <p>请选择初始难度<br>对局中每消除 10 行自动提升一个等级</p>
+          <div class="diff-row">
+            <button class="diff-btn" data-level="1">简单<small>起始 Lv.1 · 800ms</small></button>
+            <button class="diff-btn" data-level="4">普通<small>起始 Lv.4 · 635ms</small></button>
+            <button class="diff-btn" data-level="8">困难<small>起始 Lv.8 · 415ms</small></button>
+          </div>
+        </div>
+
+        <!-- 暂停遮罩 -->
+        <div class="overlay hidden" id="pauseOverlay">
+          <h2>已暂停</h2>
+          <p>按 P 键或点击“继续”按钮恢复游戏</p>
+          <button class="btn btn-primary" id="resumeBtn">继 续</button>
+        </div>
+
+        <!-- 结算遮罩 -->
+        <div class="overlay hidden" id="overOverlay">
+          <h2>游戏结束</h2>
+          <p class="result-line">本局得分：<b id="finalScore">0</b></p>
+          <p class="result-line">消除 <b id="finalLines">0</b> 行 · 等级 <b id="finalLevel">1</b> · 用时 <b id="finalDuration">00:00</b></p>
+          <p id="saveTip" style="color:var(--text-dim);font-size:13px;">正在保存成绩…</p>
+          <div class="diff-row">
+            <button class="btn btn-primary" id="againSameBtn">再来一局（同难度）</button>
+            <button class="btn btn-ghost" id="changeDiffBtn">重新选择难度</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右侧信息面板 -->
+      <div class="side-panel">
+        <div class="stat-card next-card">
+          <div class="label" style="margin-bottom:8px;">下一个</div>
+          <div class="next-wrap">
+            <canvas id="nextCanvas" width="120" height="120"></canvas>
+          </div>
+        </div>
+
+        <div class="stat-grid">
+          <div class="stat-card"><div class="label">得分</div><div class="value" id="scoreVal">0</div></div>
+          <div class="stat-card"><div class="label">历史最高</div><div class="value" id="highVal" style="color:var(--yellow);">0</div></div>
+          <div class="stat-card"><div class="label">消除行数</div><div class="value" id="linesVal">0</div></div>
+          <div class="stat-card"><div class="label">等级</div><div class="value" id="levelVal" style="color:var(--magenta);">1</div></div>
+        </div>
+
+        <div class="stat-card"><div class="label">对局用时</div><div class="value" id="timeVal" style="font-size:20px;">00:00</div></div>
+
+        <div class="btn-col">
+          <button class="btn btn-primary" id="pauseBtn">暂停 / 继续 (P)</button>
+          <button class="btn btn-ghost" id="restartBtn">重新开始</button>
+          <button class="btn btn-ghost" id="soundBtn">音效：开</button>
+        </div>
+
+        <div class="card keys">
+          <b>←/→</b> 左右移动<br>
+          <b>↑</b> 旋转方块<br>
+          <b>↓</b> 加速下落（+1分/格）<br>
+          <b>空格</b> 直接落底（+2分/格）<br>
+          <b>P</b> 暂停 / 继续<br>
+          消行得分：1行100 / 2行300 / 3行500 / 4行800 × 等级
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/common.js"></script>
+  <script src="/js/tetris.js"></script>
+  <script src="/js/game.js"></script>
+</body>
+</html>

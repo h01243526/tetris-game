@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>排行榜 - 俄罗斯方块</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="navbar" id="navbar"></div>
+
+  <div class="container">
+    <h1 class="page-title">排行榜</h1>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-type="total">总 榜</button>
+      <button class="tab-btn" data-type="day">日 榜（今日）</button>
+      <button class="tab-btn" data-type="week">周 榜（本周）</button>
+    </div>
+
+    <div id="myRankBox"></div>
+
+    <div class="card">
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr><th>名次</th><th>用户名</th><th>得分</th><th>消除行数</th><th>对局时间</th></tr>
+          </thead>
+          <tbody id="rankBody"></tbody>
+        </table>
+      </div>
+      <div class="empty hidden" id="rankEmpty">该榜单暂无对局记录</div>
+      <div class="pagination">
+        <button class="btn btn-ghost btn-sm" id="prevPage">上一页</button>
+        <span id="pageInfo">1 / 1</span>
+        <button class="btn btn-ghost btn-sm" id="nextPage">下一页</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/common.js"></script>
+  <script src="/js/leaderboard.js"></script>
+</body>
+</html>
