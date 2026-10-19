@@ -34,6 +34,14 @@ _MYSQL_HOST = os.getenv('MYSQL_HOST', _local.get('mysql_host', '127.0.0.1'))
 
 
 class Config:
+    # 数据库驱动：mysql（本地 MySQL / TiDB Cloud）或 sqlite（PythonAnywhere 等无数据库平台）
+    DB_DRIVER = os.getenv('DB_DRIVER', _local.get('db_driver', 'mysql')).strip().lower()
+    # SQLite 数据文件路径（仅 DB_DRIVER=sqlite 时生效）
+    SQLITE_PATH = os.getenv(
+        'SQLITE_PATH',
+        _local.get('sqlite_path', os.path.join(os.path.dirname(_CFG_PATH), 'tetris.sqlite3')),
+    )
+
     # MySQL 数据库连接配置
     MYSQL_HOST = _MYSQL_HOST
     MYSQL_PORT = int(os.getenv('MYSQL_PORT', _local.get('mysql_port', 3306)))

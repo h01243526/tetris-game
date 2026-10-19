@@ -1,18 +1,101 @@
 # -*- coding: utf-8 -*-
-"""数据访问层：PyMySQL 连接管理、数据库初始化、常用查询封装。"""
-import os
-import ssl
+"""数据访问层：双驱动（MySQL / SQLite）连接管理、数据库初始化、常用查询封装。
 
-import pymysql
-from pymysql.cursors import DictCursor
-from flask import g, current_app
+DB_DRIVER=mysql  本地 MySQL / TiDB Cloud（默认，原行为不变）
+DB_DRIVER=sqlite 无独立数据库平台（如 PythonAnywhere 免费版），数据存本地文件
+"""
+import os
+import sqlite3
+import ssl
+from datetime import datetime, date
+
+from flask import g
 from werkzeug.security import generate_password_hash
 
 from config import Config
 
+try:
+    import pymysql
+    from pymysql.cursors import DictCursor
+except ImportError:  # sqlite 模式下允许不安装 PyMySQL
+    pymysql = None
+    DictCursor = None
+
+
+_IS_SQLITE = Config.DB_DRIVER == 'sqlite'
+
 
 # ----------------------------------------------------------------------
-# 连接参数（本地 MySQL 无需 SSL；TiDB Cloud 等云数据库强制 TLS）
+# SQLite 适配层：把 sqlite3 包装成与 PyMySQL 一致的用法
+# （%s 占位符 -> ?、datetime 参数转字符串、cursor 支持 with、提供 begin/commit）
+# ----------------------------------------------------------------------
+class _SQLiteCursor:
+    def __init__(self, cur):
+        self._cur = cur
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_exc):
+        self._cur.close()
+
+    @staticmethod
+    def _convert(value):
+        if isinstance(value, datetime):
+            return value.strftime('%Y-%m-%d %H:%M:%S')
+        if isinstance(value, date):
+            return value.strftime('%Y-%m-%d')
+        return value
+
+    def execute(self, sql, args=()):
+        sql = sql.replace('%s', '?')
+        return self._cur.execute(sql, tuple(self._convert(a) for a in args))
+
+    def fetchone(self):
+        row = self._cur.fetchone()
+        return dict(row) if row is not None else None
+
+    def fetchall(self):
+        return [dict(r) for r in self._cur.fetchall()]
+
+    @property
+    def lastrowid(self):
+        return self._cur.lastrowid
+
+
+class _SQLiteConn:
+    """autocommit 模式（isolation_level=None）；begin() 开启显式事务。"""
+
+    def __init__(self, path):
+        db_dir = os.path.dirname(os.path.abspath(path))
+        os.makedirs(db_dir, exist_ok=True)
+        self._conn = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
+        self._conn.row_factory = sqlite3.Row
+        self._conn.execute('PRAGMA foreign_keys = ON')
+        self._conn.execute('PRAGMA busy_timeout = 5000')
+
+    def cursor(self):
+        return _SQLiteCursor(self._conn.cursor())
+
+    def begin(self):
+        self._conn.execute('BEGIN')
+
+    def commit(self):
+        self._conn.commit()
+
+    def rollback(self):
+        self._conn.rollback()
+
+    def close(self):
+        self._conn.close()
+
+
+def _connect_sqlite():
+    return _SQLiteConn(Config.SQLITE_PATH)
+
+
+# ----------------------------------------------------------------------
+# MySQL 连接参数（本地 MySQL 无需 SSL；TiDB Cloud 等云数据库强制 TLS）
 # ----------------------------------------------------------------------
 def _ssl_context():
     """按需构造 SSLContext；返回 None 表示不启用 TLS。"""
@@ -20,12 +103,10 @@ def _ssl_context():
         return None
     ctx = ssl.create_default_context()
     if Config.MYSQL_SSL_CA:
-        # 配置了 CA 证书：做完整校验
         ctx.load_verify_locations(cafile=Config.MYSQL_SSL_CA)
         ctx.check_hostname = True
         ctx.verify_mode = ssl.CERT_REQUIRED
     else:
-        # 云数据库公共 CA：加密传输但不校验证书链，避免证书路径依赖
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
     return ctx
@@ -55,7 +136,10 @@ def _conn_kwargs(with_db=True):
 # ----------------------------------------------------------------------
 def get_db():
     if 'db' not in g:
-        g.db = pymysql.connect(**_conn_kwargs(with_db=True))
+        if _IS_SQLITE:
+            g.db = _connect_sqlite()
+        else:
+            g.db = pymysql.connect(**_conn_kwargs(with_db=True))
     return g.db
 
 
@@ -89,9 +173,9 @@ def execute(sql, args=None):
 
 
 # ----------------------------------------------------------------------
-# 数据库初始化：建库 -> 执行 schema.sql -> 预置管理员与难度配置
-# 说明：云端数据库（如 TiDB Cloud）可能不允许自建库或存在少量语法差异，
-#       因此这里对每个语句做容错处理，尽可能完成初始化而不阻断启动。
+# 数据库初始化：执行 schema 脚本 -> 预置管理员与难度配置
+# 说明：MySQL 模式先尝试建库（云端可能不允许，容错跳过）；
+#       所有 DDL 逐条容错，个别不兼容时记录警告但不中断启动。
 # ----------------------------------------------------------------------
 def _connect_server():
     return pymysql.connect(**_conn_kwargs(with_db=False))
@@ -121,6 +205,19 @@ def _split_sql(script):
     return statements
 
 
+def _apply_schema(conn, script_name):
+    schema_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), script_name)
+    with open(schema_path, 'r', encoding='utf-8') as f:
+        statements = _split_sql(f.read())
+    with conn.cursor() as cur:
+        for stmt in statements:
+            try:
+                cur.execute(stmt)
+            except Exception as e:
+                first_line = stmt.strip().splitlines()[0][:80]
+                print(f'[init][warn] 语句执行失败（已跳过）：{first_line}\n           {e}')
+
+
 def _seed(conn):
     """预置管理员账号与 1~15 级难度配置（幂等）。"""
     with conn.cursor() as cur:
@@ -133,10 +230,8 @@ def _seed(conn):
                  generate_password_hash(Config.ADMIN_PASSWORD),
                  '系统管理员', 'admin'),
             )
-            print(f'[init] 已创建管理员账号：{Config.ADMIN_USERNAME} / {Config.ADMIN_PASSWORD}')
+            print(f'[init] 已创建管理员账号：{Config.ADMIN_USERNAME}')
 
-        # 等级 1~3 简单，4~7 普通，8~12 困难，13~15 专家
-        # 下落间隔：800ms 起，每升一级减少 55ms，最低 80ms；每 10 行升一级
         def level_name(level):
             if level <= 3:
                 return '简单'
@@ -158,12 +253,18 @@ def _seed(conn):
 
 
 def init_db():
-    """启动时调用：建库、建表、初始化数据。
+    """启动时调用：建表、初始化数据（幂等）。"""
+    if _IS_SQLITE:
+        conn = _connect_sqlite()
+        try:
+            _apply_schema(conn, 'schema_sqlite.sql')
+            _seed(conn)
+        finally:
+            conn.close()
+        print(f'[init] SQLite 数据库初始化完成：{Config.SQLITE_PATH}')
+        return
 
-    对建库与建表语句做容错：云端数据库可能不允许 CREATE DATABASE（已由控制台
-    预先创建），此时给出提示并继续；个别 DDL 不兼容时记录警告但不中断启动。
-    """
-    # 1. 尝试建库（本地 MySQL 需要；TiDB Cloud 等通常已在控制台建好）
+    # MySQL：先尝试建库（TiDB Cloud 等已预建时会失败，容错继续）
     try:
         conn = _connect_server()
         try:
@@ -177,25 +278,9 @@ def init_db():
     except Exception as e:
         print(f'[init] 跳过建库（{e}）；若数据库不存在，请在云控制台创建 "{Config.MYSQL_DB}"')
 
-    # 2. 建表 / 建视图（逐条容错）
     conn = _connect_db()
     try:
-        schema_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'schema.sql')
-        with open(schema_path, 'r', encoding='utf-8') as f:
-            statements = _split_sql(f.read())
-        with conn.cursor() as cur:
-            for stmt in statements:
-                try:
-                    cur.execute(stmt)
-                except Exception as e:
-                    first_line = stmt.strip().splitlines()[0][:80]
-                    print(f'[init][warn] 语句执行失败（已跳过）：{first_line}\n           {e}')
-    finally:
-        conn.close()
-
-    # 3. 预置管理员与难度数据
-    conn = _connect_db()
-    try:
+        _apply_schema(conn, 'schema.sql')
         _seed(conn)
     finally:
         conn.close()

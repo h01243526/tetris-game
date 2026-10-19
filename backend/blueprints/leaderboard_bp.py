@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """成绩模块（三）：多维度排行榜（总榜 / 日榜 / 周榜，F-12）。"""
-from flask import Blueprint, request, g
+from datetime import datetime, timedelta
+
+from flask import Blueprint, request
 
 from db import query_all, query_one
 from utils import success, fail, fmt_dt, parse_pagination
@@ -8,12 +10,19 @@ from auth import load_current_user
 
 bp = Blueprint('leaderboard', __name__)
 
-# 榜单类型 -> end_time 时间范围条件（参数由 MySQL 端计算）
-TYPE_COND = {
-    'total': '',
-    'day': 'AND g.end_time >= CURDATE()',
-    'week': 'AND g.end_time >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)',
-}
+
+def _type_cond(board_type):
+    """返回 (SQL 片段, 参数列表)：日榜=今日 0 点起；周榜=本周一 0 点起。
+
+    日期由 Python 计算后以参数传入，MySQL / SQLite 两种驱动通用。
+    """
+    today = datetime.now().date()
+    if board_type == 'day':
+        return 'AND g.end_time >= %s', [today.strftime('%Y-%m-%d')]
+    if board_type == 'week':
+        monday = today - timedelta(days=today.weekday())
+        return 'AND g.end_time >= %s', [monday.strftime('%Y-%m-%d')]
+    return '', []
 
 # 每个用户只取其最高分的一条记录（rn = 1），再全局排名；
 # played_at 精确到日期（DATE_FORMAT 仅返回 YYYY-MM-DD）
@@ -34,24 +43,25 @@ RANK_SUBQUERY = (
 @bp.get('/api/leaderboard')
 def get_leaderboard():
     board_type = (request.args.get('type') or 'total').strip()
-    if board_type not in TYPE_COND:
+    if board_type not in ('total', 'day', 'week'):
         return fail('榜单类型非法，可选 total / day / week', 400)
     page, page_size = parse_pagination(request.args)
     offset = (page - 1) * page_size
-    cond = TYPE_COND[board_type]
+    cond, cond_args = _type_cond(board_type)
 
     # 游客可浏览；若携带了有效 Token，则额外返回当前用户排名用于高亮
     user, _ = load_current_user(required=False)
 
     total_row = query_one(
         f'SELECT COUNT(DISTINCT g.user_id) AS cnt FROM game_score g '
-        f'JOIN `user` u ON u.id = g.user_id AND u.status = 1 WHERE 1 = 1 {cond}'
+        f'JOIN `user` u ON u.id = g.user_id AND u.status = 1 WHERE 1 = 1 {cond}',
+        cond_args,
     )
 
     rows = query_all(
         f'SELECT * FROM ({RANK_SUBQUERY.format(cond=cond)}) t '
         f'ORDER BY t.`rank` LIMIT %s OFFSET %s',
-        (page_size, offset),
+        cond_args + [page_size, offset],
     )
     data = [{
         'rank': r['rank'],
@@ -66,7 +76,7 @@ def get_leaderboard():
         mine = query_one(
             f'SELECT `rank`, username FROM ({RANK_SUBQUERY.format(cond=cond)}) t '
             f'WHERE username = %s ORDER BY `rank` LIMIT 1',
-            (user['username'],),
+            cond_args + [user['username']],
         )
         my_rank = mine['rank'] if mine else None
 
